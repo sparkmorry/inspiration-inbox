@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>灵感库</title>
+  <style>
+    :root {
+      color: #1c241f;
+      background: #f4f1ea;
+      font: 15px/1.45 "PingFang SC", "Hiragino Sans GB", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 16px;
+      padding: 16px 22px;
+      background: rgba(244, 241, 234, 0.94);
+      border-bottom: 1px solid #e1dbd0;
+    }
+    h1 { margin: 0; font-size: 20px; font-weight: 600; }
+    .count { color: #6d675e; font-size: 13px; }
+    button {
+      font: inherit;
+      color: #1f6f5b;
+      background: transparent;
+      border: 0;
+      padding: 0;
+      cursor: pointer;
+    }
+    main { padding: 18px 22px 40px; }
+    .board { columns: 240px; column-gap: 14px; }
+    .card {
+      break-inside: avoid;
+      margin: 0 0 14px;
+      background: #fffdf8;
+      border: 1px solid #e1dbd0;
+    }
+    .frame {
+      display: block;
+      width: 100%;
+      padding: 0;
+      color: inherit;
+    }
+    .frame img { width: 100%; height: auto; display: block; background: #efeae2; }
+    .caption { padding: 8px 10px 10px; }
+    .title, .note { margin: 0; }
+    .note { margin-top: 6px; white-space: pre-wrap; }
+    .meta { margin: 3px 0 0; color: #6d675e; font-size: 12px; }
+    .meta a { color: #1f6f5b; }
+    .tag { color: #8a4b32; }
+    .empty { margin: 0; color: #6d675e; }
+    dialog {
+      width: min(960px, calc(100vw - 32px));
+      padding: 0;
+      border: 0;
+      background: transparent;
+    }
+    dialog::backdrop { background: rgba(28, 36, 31, 0.72); }
+    dialog img { width: 100%; height: auto; max-height: 86vh; object-fit: contain; background: #1c241f; }
+    dialog form { margin: 8px 0 0; text-align: right; }
+    dialog button { color: #f4f1ea; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>灵感库</h1>
+    <div class="count"><span id="count">0</span> 张 · <button id="reload" type="button">刷新</button></div>
+  </header>
+  <main>
+    <p id="empty" class="empty" hidden>还没有采集。在网页图片上右键，选「保存到灵感库」。</p>
+    <div id="board" class="board"></div>
+  </main>
+  <dialog id="viewer">
+    <img id="viewer-image" alt="" />
+    <form method="dialog"><button value="close">关闭</button></form>
+  </dialog>
+  <script>
+    const board = document.querySelector("#board");
+    const empty = document.querySelector("#empty");
+    const count = document.querySelector("#count");
+    const viewer = document.querySelector("#viewer");
+    const viewerImage = document.querySelector("#viewer-image");
+
+    function when(value) {
+      if (!value) return "";
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return "";
+      return date.toLocaleString("zh-CN", { hour12: false });
+    }
+
+    function render(item) {
+      const card = document.createElement("article");
+      card.className = "card";
+      const frame = document.createElement("button");
+      frame.className = "frame";
+      frame.type = "button";
+      const image = document.createElement("img");
+      image.src = item.imageUrl;
+      image.alt = item.alt || item.pageTitle || "采集的图片";
+      frame.append(image);
+      frame.addEventListener("click", () => {
+        viewerImage.src = item.imageUrl;
+        viewerImage.alt = image.alt;
+        viewer.showModal();
+      });
+      const caption = document.createElement("div");
+      caption.className = "caption";
+      const title = document.createElement("p");
+      title.className = "title";
+      title.textContent = item.pageTitle || "未命名页面";
+      const meta = document.createElement("p");
+      meta.className = "meta";
+      const bits = [];
+      const time = when(item.savedAt);
+      if (time) bits.push(time);
+      if (item.width && item.height) bits.push(`${item.width}×${item.height}`);
+      meta.textContent = bits.join(" · ");
+      if (item.likelyThumbnail) {
+        const tag = document.createElement("span");
+        tag.className = "tag";
+        tag.textContent = bits.length ? " · 偏小" : "偏小";
+        meta.append(tag);
+      }
+      if (item.pageUrl) {
+        const link = document.createElement("a");
+        link.href = item.pageUrl;
+        link.target = "_blank";
+        link.rel = "noreferrer";
+        link.textContent = bits.length || item.likelyThumbnail ? " · 来源" : "来源";
+        meta.append(link);
+      }
+      caption.append(title, meta);
+      if (item.note) {
+        const note = document.createElement("p");
+        note.className = "note";
+        note.textContent = item.note;
+        caption.append(note);
+      }
+      card.append(frame, caption);
+      return card;
+    }
+
+    async function load() {
+      const response = await fetch("/api/items", { cache: "no-store" });
+      if (!response.ok) throw new Error("offline");
+      const data = await response.json();
+      const items = Array.isArray(data.items) ? data.items : [];
+      count.textContent = String(items.length);
+      empty.hidden = items.length > 0;
+      empty.textContent = "还没有采集。在网页图片上右键，选「保存到灵感库」。";
+      board.replaceChildren(...items.map(render));
+    }
+
+    document.querySelector("#reload").addEventListener("click", () => {
+      load().catch(() => {
+        empty.hidden = false;
+        empty.textContent = "采集页读不出来。确认收集服务还在运行。";
+      });
+    });
+    viewer.addEventListener("click", (event) => {
+      if (event.target === viewer) viewer.close();
+    });
+    load().catch(() => {
+      empty.hidden = false;
+      empty.textContent = "采集页读不出来。确认收集服务还在运行。";
+    });
+    setInterval(() => {
+      if (document.visibilityState === "visible" && !viewer.open) load().catch(() => {});
+    }, 8000);
+  </script>
+</body>
+</html>

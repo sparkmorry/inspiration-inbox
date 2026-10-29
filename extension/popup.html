@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>灵感库</title>
+  <style>
+    body {
+      margin: 0;
+      width: 320px;
+      color: #1c241f;
+      background: #f4f1ea;
+      font: 13px/1.45 "PingFang SC", "Hiragino Sans GB", sans-serif;
+    }
+    header, main { padding: 14px 16px; }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      border-bottom: 1px solid #e1dbd0;
+    }
+    h1 { margin: 0; font-size: 16px; font-weight: 600; }
+    .status { font-size: 12px; }
+    .online { color: #1f6f5b; }
+    .offline { color: #8a4b32; }
+    ul { list-style: none; margin: 0; padding: 0; }
+    li { padding: 8px 0; border-bottom: 1px solid #e7e1d6; }
+    li:last-child { border-bottom: 0; }
+    .title { margin: 0; }
+    .meta { margin: 2px 0 0; color: #6d675e; font-size: 11px; }
+    .hint, .empty { margin: 0; color: #6d675e; }
+    .open { margin: 0 0 10px; }
+    .open a { color: #1f6f5b; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>灵感库</h1>
+    <div id="status" class="status">正在连接…</div>
+  </header>
+  <main>
+    <p id="hint" class="hint" hidden></p>
+    <p id="open" class="open" hidden><a id="open-link" href="http://127.0.0.1:3921/">打开采集页</a></p>
+    <ul id="recent"></ul>
+  </main>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
