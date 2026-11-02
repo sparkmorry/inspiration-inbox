@@ -15,11 +15,56 @@ if (!globalThis.__inspirationCollector) {
   ];
   const LAZY_ATTRS = ["data-src", "data-lazy-src"];
   let lastImage = null;
+  let lastDirectUrl = "";
 
-  document.addEventListener("contextmenu", (event) => {
+  function containsPoint(node, event) {
+    const rect = node.getBoundingClientRect();
+    return rect.width >= 48 && rect.height >= 48 && event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
+  }
+
+  function backgroundUrl(node) {
+    let value = "";
+    try {
+      value = getComputedStyle(node).backgroundImage || "";
+    } catch {
+      return "";
+    }
+    const matched = value.match(/url\((['"]?)(.*?)\1\)/);
+    const url = matched?.[2] || "";
+    if (!url || url.startsWith("data:")) return "";
+    return url;
+  }
+
+  function imageAt(event) {
     const path = typeof event.composedPath === "function" ? event.composedPath() : [event.target];
-    const img = path.find((node) => node && node.tagName === "IMG");
-    if (img) lastImage = img;
+    const direct = path.find((node) => node && node.tagName === "IMG");
+    if (direct) return { img: direct };
+    let node = path.find((item) => item && item.nodeType === 1) || null;
+    for (let depth = 0; node && node !== document.documentElement && depth < 8; depth += 1, node = node.parentElement) {
+      if (containsPoint(node, event)) {
+        const painted = backgroundUrl(node);
+        if (painted) return { url: painted };
+      }
+      const imgs = node.querySelectorAll ? [...node.querySelectorAll("img")] : [];
+      const hit = imgs.find((img) => containsPoint(img, event));
+      if (hit) return { img: hit };
+    }
+    return null;
+  }
+
+  window.addEventListener("contextmenu", (event) => {
+    const found = imageAt(event);
+    if (found?.img) {
+      lastImage = found.img;
+      lastDirectUrl = "";
+    } else if (found?.url) {
+      lastImage = null;
+      lastDirectUrl = found.url;
+    } else {
+      lastImage = null;
+      lastDirectUrl = "";
+    }
+    if (found) event.stopImmediatePropagation();
   }, true);
 
   function resolveUrl(url) {
@@ -83,6 +128,7 @@ if (!globalThis.__inspirationCollector) {
         pushCandidate(candidates, link.href, UNKNOWN_LARGE, "parent", true);
       }
     }
+    if (!img && lastDirectUrl) pushCandidate(candidates, lastDirectUrl, UNKNOWN_LARGE, "background", true);
     if (srcUrl) pushCandidate(candidates, srcUrl, 1, "clicked", false);
     candidates.sort((a, b) => b.width - a.width);
     return {

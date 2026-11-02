@@ -7,11 +7,13 @@ const MAX_BYTES = 25 * 1024 * 1024;
 const CLEAR_EDGE = 480;
 
 function setupMenu() {
-  chrome.contextMenus.create({
-    id: MENU_ID,
-    title: "保存到灵感库",
-    contexts: ["image"],
-  }, () => void chrome.runtime.lastError);
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({
+      id: MENU_ID,
+      title: "保存到灵感库",
+      contexts: ["image", "link", "page"],
+    });
+  });
 }
 
 chrome.runtime.onInstalled.addListener(setupMenu);
@@ -58,39 +60,78 @@ function toBase64(bytes) {
 
 async function fetchImage(url, pageUrl) {
   if (!/^https?:\/\//i.test(url)) return null;
-  for (const credentials of ["omit", "include"]) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 20000);
-    try {
-      const response = await fetch(url, {
-        credentials,
-        redirect: "follow",
-        referrer: pageUrl || "",
-        referrerPolicy: pageUrl ? "unsafe-url" : "no-referrer",
-        signal: controller.signal,
-      });
-      if (!response.ok) continue;
-      const declared = Number(response.headers.get("content-length") || 0);
-      if (declared > MAX_BYTES) return { tooBig: true };
-      const mime = (response.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
-      if (mime && !mime.startsWith("image/") && mime !== "application/octet-stream" && mime !== "binary/octet-stream") {
-        continue;
+  return withPageReferer(pageUrl, async () => {
+    for (const credentials of ["omit", "include"]) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 20000);
+      try {
+        const response = await fetch(url, {
+          credentials,
+          redirect: "follow",
+          referrer: pageUrl || "",
+          referrerPolicy: pageUrl ? "unsafe-url" : "no-referrer",
+          signal: controller.signal,
+        });
+        if (!response.ok) continue;
+        const declared = Number(response.headers.get("content-length") || 0);
+        if (declared > MAX_BYTES) return { tooBig: true };
+        const mime = (response.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+        if (mime && !mime.startsWith("image/") && mime !== "application/octet-stream" && mime !== "binary/octet-stream") {
+          continue;
+        }
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        if (!bytes.length) continue;
+        if (bytes.length > MAX_BYTES) return { tooBig: true };
+        if (!sniffImage(bytes)) continue;
+        const size = readImageSize(bytes);
+        const base64 = await toBase64(bytes);
+        if (!base64) continue;
+        return { base64, savedUrl: url, width: size?.width ?? null, height: size?.height ?? null };
+      } catch {
+        // 换一种凭证方式，或试下一张地址。
+      } finally {
+        clearTimeout(timer);
       }
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      if (!bytes.length) continue;
-      if (bytes.length > MAX_BYTES) return { tooBig: true };
-      if (!sniffImage(bytes)) continue;
-      const size = readImageSize(bytes);
-      const base64 = await toBase64(bytes);
-      if (!base64) continue;
-      return { base64, savedUrl: url, width: size?.width ?? null, height: size?.height ?? null };
-    } catch {
-      // 换一种凭证方式，或试下一张地址。
-    } finally {
-      clearTimeout(timer);
     }
+    return null;
+  });
+}
+
+let refererChain = Promise.resolve();
+
+function withPageReferer(pageUrl, action) {
+  const run = refererChain.then(() => applyPageReferer(pageUrl, action));
+  refererChain = run.then(() => undefined, () => undefined);
+  return run;
+}
+
+async function applyPageReferer(pageUrl, action) {
+  const ruleId = 1;
+  if (!pageUrl) return action();
+  try {
+    await chrome.declarativeNetRequest.updateDynamicRules({
+      removeRuleIds: [ruleId],
+      addRules: [{
+        id: ruleId,
+        priority: 1,
+        action: {
+          type: "modifyHeaders",
+          requestHeaders: [{ header: "Referer", operation: "set", value: pageUrl }],
+        },
+        condition: {
+          regexFilter: "^https?://",
+          resourceTypes: ["xmlhttprequest", "other", "image", "media"],
+        },
+      }],
+    });
+  } catch {
+    return action();
   }
-  return null;
+  try {
+    return await action();
+  } finally {
+    await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: [ruleId] }).catch(() => undefined);
+  }
 }
 
 function clipField(value, max = 2000) {
@@ -159,17 +200,6 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 });
 
 async function saveClickedImage(info, tab) {
-  const asked = await sendToFrame(tab.id, 0, { type: "ask-note" });
-  if (!asked) {
-    await report(tab.id, "保存失败：备注框没有打开", false);
-    return;
-  }
-  if (!asked.confirmed) {
-    if (!asked.alreadyOpen) await report(tab.id, "已取消", true, { system: false });
-    return;
-  }
-  const note = clipField(asked.note || "", 1000);
-  await report(tab.id, "正在保存…", true, { system: false });
   const clickedUrl = info.srcUrl || "";
   const clickedForPage = clickedUrl.startsWith("data:") ? "" : clickedUrl;
   const pageUrl = info.pageUrl || tab.url || "";
@@ -177,6 +207,17 @@ async function saveClickedImage(info, tab) {
   const pageTitle = fromPage?.pageTitle || tab.title || "";
   const alt = fromPage?.alt || "";
   const urls = globalThis.InspirationPick.chooseAttemptUrls(fromPage?.candidates, clickedForPage);
+  if (!urls.length) {
+    await report(tab.id, "这里没有找到图片。如果是小红书，先刷新页面再试一次", false);
+    return;
+  }
+  const asked = await sendToFrame(tab.id, 0, { type: "ask-note" });
+  if (asked && !asked.confirmed) {
+    if (!asked.alreadyOpen) await report(tab.id, "已取消", true, { system: false });
+    return;
+  }
+  const note = clipField(asked?.note || "", 1000);
+  await report(tab.id, "正在保存…", true, { system: false });
   const downloaded = [];
   let sawOffline = false;
   let sawTooBig = false;
