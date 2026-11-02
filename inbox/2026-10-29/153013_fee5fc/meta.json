@@ -1,0 +1,21 @@
+{
+  "id": "2026-10-29_153013_fee5fc",
+  "savedAt": "2026-10-29T15:30:13.441+08:00",
+  "status": "inbox",
+  "source": {
+    "clickedUrl": "https://b0.bdstatic.com/ugc/CClHUFRXhVZMN1imWIHWEA97d0e3e86b92e423b51e899f6d708437.jpg@h_1280",
+    "savedUrl": "https://b0.bdstatic.com/ugc/CClHUFRXhVZMN1imWIHWEA97d0e3e86b92e423b51e899f6d708437.jpg@h_1280",
+    "pageUrl": "https://image.baidu.com/search/detail?adpicid=0&b_applid=9049083729342621922&bdtype=0&commodity=&copyright=&cs=3705144626%2C439376325&di=1&fr=click-pic&fromurl=https%253A%252F%252Fmbd.baidu.com%252Fnewspage%252Fdata%252Fdtlandingsuper%253Fnid%253Ddt_5026253082039391489&gsm=1e&hd=&height=0&hot=&ic=&ie=utf-8&imgformat=&imgratio=&imgspn=0&is=0%2C0&isImgSet=&latest=&lid=&lm=&objurl=https%253A%252F%252Fb0.bdstatic.com%252Fugc%252FCClHUFRXhVZMN1imWIHWEA97d0e3e86b92e423b51e899f6d708437.jpg%2540h_1280&os=3208256366%2C10306176&pd=image_content&pi=0&pn=11&rn=1&simid=4212954195%2C816642097&tn=baiduimagedetail&width=0&word=pixiv%2Bai&z=",
+    "pageTitle": "pixiv ai的搜索结果_百度图片搜索",
+    "alt": "",
+    "mime": "image/jpeg",
+    "width": 972,
+    "height": 1280,
+    "likelyThumbnail": false
+  },
+  "files": {
+    "image": "source.jpg"
+  },
+  "contentHash": "789eb0540805404339f89460d87dc1d05024c8550e6d72f5d89a6c45cf5366f5",
+  "analysis": null
+}

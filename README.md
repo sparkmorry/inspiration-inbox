@@ -47,7 +47,7 @@ inbox/2026-10-29/143012_ab12cd/
 | `contentHash` | 文件内容的 SHA-256，同一张图不会再存一份 |
 | `analysis` | 现在是 `null` |
 
-`inbox/` 只在本机使用，不进入 git。
+采集的图片和 `meta.json` 都在 `inbox/` 里，会一起放进 git。推到远程仓库后，这些文件在 git 主机上有一份。本机的采集服务仍然读这台电脑上的 `inbox/`，不会因为一次 push 就自动跑到另一台服务器。
 
 ## 以后在 Cursor 里分析
 
